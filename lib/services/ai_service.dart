@@ -57,6 +57,7 @@ class AiService {
   int _maxTokens = 1024;
   bool _useScreenCompression = true;
   bool _useSystemPrompt = true;
+  bool _useHybridVision = true;
   final List<Map<String, String>> _conversationHistory = [];
 
   static const String _systemPrompt = '''
@@ -116,6 +117,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     _maxTokens = prefs.getInt('api_max_tokens') ?? 1024;
     _useScreenCompression = prefs.getBool('api_use_screen_compression') ?? true;
     _useSystemPrompt = prefs.getBool('api_use_system_prompt') ?? true;
+    _useHybridVision = prefs.getBool('api_use_hybrid_vision') ?? true;
   }
 
   Future<void> saveSettings({
@@ -161,16 +163,27 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     required int maxTokens,
     required bool useScreenCompression,
     required bool useSystemPrompt,
+    bool? useHybridVision,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     _temperature = temperature;
     _maxTokens = maxTokens;
     _useScreenCompression = useScreenCompression;
     _useSystemPrompt = useSystemPrompt;
+    if (useHybridVision != null) {
+      _useHybridVision = useHybridVision;
+      await prefs.setBool('api_use_hybrid_vision', useHybridVision);
+    }
     await prefs.setDouble('api_temperature', temperature);
     await prefs.setInt('api_max_tokens', maxTokens);
     await prefs.setBool('api_use_screen_compression', useScreenCompression);
     await prefs.setBool('api_use_system_prompt', useSystemPrompt);
+  }
+
+  Future<void> saveHybridVision(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    _useHybridVision = enabled;
+    await prefs.setBool('api_use_hybrid_vision', enabled);
   }
 
   bool get isConfigured => _apiKey != null && _apiKey!.isNotEmpty;
@@ -184,6 +197,7 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   int get maxTokens => _maxTokens;
   bool get useScreenCompression => _useScreenCompression;
   bool get useSystemPrompt => _useSystemPrompt;
+  bool get useHybridVision => _useHybridVision;
 
   int get _effectiveMaxTokens {
     // GLM is a reasoning model. With the app's 1,024-token default it can
@@ -468,8 +482,12 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
   }
 
   /// Send a task execution message — no conversation history, low temperature, limited tokens.
-  /// This is much faster and cheaper than sendMessage.
-  Future<AiResponse> sendTaskMessage(String systemPrompt, String prompt) async {
+  /// Supports multimodal vision payload (live screenshot) when base64Image is provided.
+  Future<AiResponse> sendTaskMessage(
+    String systemPrompt,
+    String prompt, {
+    String? base64Image,
+  }) async {
     if (_apiKey == null || _apiKey!.isEmpty) {
       throw Exception('API Key is not configured. Please go to Settings.');
     }
@@ -480,9 +498,25 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
     while (true) {
       try {
         currentTry++;
+
+        final dynamic userContent;
+        if (base64Image != null && base64Image.isNotEmpty) {
+          userContent = [
+            {'type': 'text', 'text': prompt},
+            {
+              'type': 'image_url',
+              'image_url': {
+                'url': 'data:image/jpeg;base64,$base64Image',
+              },
+            },
+          ];
+        } else {
+          userContent = prompt;
+        }
+
         final messages = [
           if (_useSystemPrompt) {'role': 'system', 'content': systemPrompt},
-          {'role': 'user', 'content': prompt},
+          {'role': 'user', 'content': userContent},
         ];
 
         String requestUrl = _baseUrl;
@@ -526,6 +560,17 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
           } catch (_) {
             // ignore parsing errors, use raw body
           }
+
+          // If vision payload was rejected by model or endpoint (e.g. 400 Bad Request, unsupported image),
+          // gracefully fall back to text-only mode immediately!
+          if (base64Image != null && base64Image.isNotEmpty) {
+            developer.log(
+              '[AiService] Vision payload failed (${response.statusCode}: $errorMessage). Falling back to text-only mode.',
+              name: 'PrivateAgent',
+            );
+            return sendTaskMessage(systemPrompt, prompt, base64Image: null);
+          }
+
           throw Exception('API error (${response.statusCode}): $errorMessage');
         }
 
@@ -553,6 +598,15 @@ Answer questions, explain concepts, brainstorm, write emails/messages, and chat 
         }
         return AiResponse(content, tokens);
       } catch (e) {
+        // If an exception occurred during a vision call (e.g. payload too large), fallback to text
+        if (base64Image != null && base64Image.isNotEmpty) {
+          developer.log(
+            '[AiService] Vision request error ($e). Retrying with text-only mode.',
+            name: 'PrivateAgent',
+          );
+          return sendTaskMessage(systemPrompt, prompt, base64Image: null);
+        }
+
         if (currentTry > maxRetries) {
           if (e is Exception) rethrow;
           throw Exception('Network error after $maxRetries retries: $e');

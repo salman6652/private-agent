@@ -43,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   double _temperature = 1.0;
   bool _useScreenCompression = true;
   bool _useSystemPrompt = true;
+  bool _useHybridVision = true;
   bool _floatingIconEnabled = false;
   bool _isOverlayPermissionGranted = false;
 
@@ -67,6 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
     _useScreenCompression = widget.aiService.useScreenCompression;
     _useSystemPrompt = widget.aiService.useSystemPrompt;
+    _useHybridVision = widget.aiService.useHybridVision;
 
     // Auto-save listeners
     _apiKeyController.addListener(_autoSave);
@@ -164,6 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       maxTokens: int.tryParse(_maxTokensController.text) ?? 1024,
       useScreenCompression: _useScreenCompression,
       useSystemPrompt: _useSystemPrompt,
+      useHybridVision: _useHybridVision,
     );
   }
 
@@ -672,6 +675,20 @@ class _SettingsScreenState extends State<SettingsScreen>
             subtitle: 'Additional feature flags and overlay options',
             isDark: isDark,
             children: [
+              SwitchListTile(
+                title: const Text('Hybrid Vision Mode (AI Vision)'),
+                subtitle: const Text(
+                  'Sends live screen screenshot to AI for visual perception alongside text dump',
+                ),
+                value: _useHybridVision,
+                onChanged: (bool value) {
+                  setState(() {
+                    _useHybridVision = value;
+                  });
+                  _autoSave();
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
               SwitchListTile(
                 title: const Text('Use Screen Compression'),
                 subtitle: const Text(

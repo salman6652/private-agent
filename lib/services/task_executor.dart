@@ -77,6 +77,7 @@ Available actions:
 
 Rules:
 - You will receive a TEXT DUMP of the accessibility tree containing exact text strings and center coordinates.
+- In Hybrid Vision Mode, you are provided with both the TEXT DUMP and a live SCREENSHOT of the device display. Use the visual image to identify thumbnails, video titles, play buttons, icons without text, or graphical layouts, and correlate them with the coordinates in the text dump.
 - ALWAYS use the text dump to decide your next action.
 - If you need to click something, prefer using `click_text`. If the element does not have text, use `click_at` with the coordinates provided in the text dump.
 - In web browsers or video platforms (like YouTube):
@@ -271,12 +272,32 @@ Rules:
             '\n\nWARNING: You have failed $consecutiveFailures times in a row with the same approach. You MUST try a completely different action. If open_app failed, try press_home and look for the app icon on the home screen instead. If click_text failed, use click_at with coordinates. Do NOT repeat the same failed action.';
       }
 
+      // Capture live screenshot in Hybrid Vision Mode
+      String? screenshotBase64;
+      if (_aiService.useHybridVision) {
+        try {
+          screenshotBase64 = await _screenService.takeScreenshot();
+          if (screenshotBase64 != null && screenshotBase64.isNotEmpty) {
+            _report('Hybrid Mode: Visual screen captured');
+          }
+        } catch (e) {
+          developer.log(
+            'Hybrid Vision screenshot capture failed: $e',
+            name: 'PrivateAgent',
+          );
+        }
+      }
+
+      final visionHint = (screenshotBase64 != null && screenshotBase64.isNotEmpty)
+          ? '\n[LIVE SCREENSHOT ATTACHED: Use visual perception for thumbnails, video titles, play buttons, images, and layout along with text dump coordinates.]\n'
+          : '';
+
       // 2. Build the prompt (system prompt is sent separately via sendTaskMessage)
       final prompt =
           '''TASK: $userGoal
 
 CURRENT SCREEN TEXT DUMP:
-$screenContent$prevResultStr$failureHint
+$screenContent$prevResultStr$failureHint$visionHint
 Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. What is the next action?''';
 
       developer.log('=== AI PROMPT ===\n$prompt', name: 'PrivateAgent');
@@ -285,7 +306,11 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
       String response;
       try {
         _cancelCompleter = Completer<void>();
-        final aiFuture = _aiService.sendTaskMessage(_taskSystemPrompt, prompt);
+        final aiFuture = _aiService.sendTaskMessage(
+          _taskSystemPrompt,
+          prompt,
+          base64Image: screenshotBase64,
+        );
 
         // Race: whichever finishes first wins
         final result = await Future.any([
