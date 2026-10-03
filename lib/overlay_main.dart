@@ -362,11 +362,16 @@ class _OverlayAppState extends State<OverlayApp> {
             decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
+              border: _isSent
+                  ? Border.all(color: const Color(0xFF4F46E5), width: 2.5)
+                  : null,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.25),
-                  blurRadius: 8,
-                  spreadRadius: 1,
+                  color: _isSent
+                      ? const Color(0xFF4F46E5).withOpacity(0.4)
+                      : Colors.black.withOpacity(0.25),
+                  blurRadius: _isSent ? 12 : 8,
+                  spreadRadius: _isSent ? 2 : 1,
                   offset: const Offset(0, 2),
                 ),
               ],
@@ -559,14 +564,25 @@ class _OverlayAppState extends State<OverlayApp> {
                   ),
                   const SizedBox(width: 6),
                   _isSent
-                      ? const SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: Padding(
-                            padding: EdgeInsets.all(6),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.black,
+                      ? GestureDetector(
+                          onTap: () {
+                            _executor?.cancel();
+                            FlutterOverlayWindow.shareData('OVERLAY_TASK_CANCELLED');
+                            setState(() {
+                              _isSent = false;
+                            });
+                          },
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.stop_rounded,
+                              color: Colors.white,
+                              size: 16,
                             ),
                           ),
                         )
