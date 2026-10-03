@@ -110,12 +110,25 @@ class TelegramService {
       return;
     }
 
-    // 2. Help / start command
+    // 2. Screenshot command
+    if (lower == '/screenshot' || lower == 'screenshot') {
+      await _sendMessage(chatId, '📸 Capturing current screen...');
+      final base64Image = await _actionHandler.screenAutomation.takeScreenshot();
+      if (base64Image != null && base64Image.isNotEmpty) {
+        await _sendPhotoBase64(chatId, base64Image, caption: '📱 Current phone screen');
+      } else {
+        await _sendMessage(chatId, '❌ Failed to capture screenshot. Make sure Accessibility Service is active.');
+      }
+      return;
+    }
+
+    // 3. Help / start command
     if (lower == '/start' || lower == '/help') {
       await _sendMessage(
         chatId,
         '🤖 *PrivateAgent Bot Active*\n\n'
         '• Send any task command to automate your phone.\n'
+        '• Send `/screenshot` to view current screen live.\n'
         '• Send `/stop` or `/cancel` to stop an ongoing task midway.',
       );
       return;
@@ -165,6 +178,36 @@ class TelegramService {
       );
     } catch (e) {
       print('Failed to send telegram message: $e');
+    }
+  }
+
+  Future<void> _sendPhotoBase64(
+    String chatId,
+    String base64Image, {
+    String? caption,
+  }) async {
+    if (_botToken.isEmpty) return;
+    try {
+      final bytes = base64Decode(base64Image);
+      final url = Uri.parse('https://api.telegram.org/bot$_botToken/sendPhoto');
+      final request = http.MultipartRequest('POST', url)
+        ..fields['chat_id'] = chatId;
+      if (caption != null) {
+        request.fields['caption'] = caption;
+      }
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'photo',
+          bytes,
+          filename: 'screenshot.jpg',
+        ),
+      );
+      final streamedResponse = await request.send();
+      if (streamedResponse.statusCode != 200) {
+        print('Telegram sendPhoto failed: ${streamedResponse.statusCode}');
+      }
+    } catch (e) {
+      print('Telegram sendPhoto error: $e');
     }
   }
 

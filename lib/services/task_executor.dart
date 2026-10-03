@@ -83,6 +83,10 @@ Rules:
   - To open or play a video from search results, click the video title or click the thumbnail coordinates using `click_at` or `click_text`.
   - If clicking by text does not start the video, switch immediately to `click_at` using the center coordinates of the video thumbnail or title.
   - Once the video player opens and playback begins, mark the task as complete (set is_complete=true).
+- When finding contacts, making calls, or handling missed calls:
+  - If a missed call banner, "Call back" button, dialer contact card, or phone number is visible on screen, click "Call back" or click the contact name / call icon directly.
+  - If looking for a contact in the Phone or Contacts app, click the search icon or type the name into the search bar, then click the contact to call.
+  - Once the call is dialing or initiated, mark the task as complete (set is_complete=true).
 - When typing in a search box, you MUST click it first, wait a step, and THEN type.
 - After typing a search query, use `press_enter` once. If the screen does not change, click the exact visible suggestion text. Do not repeat the same submit action more than twice.
 - Never scroll or swipe more than three times in a row. After three scrolls, choose the best visible result or take a different action instead of continuing to browse indefinitely.

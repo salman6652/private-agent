@@ -47,18 +47,52 @@ class ActionHandler {
           break;
 
         case 'make_call':
+          final contactName = action.params['contact_name'] as String?;
+          final phoneNumber = action.params['phone_number'] as String?;
           result = await _communication.makeCall(
-            contactName: action.params['contact_name'] as String?,
-            phoneNumber: action.params['phone_number'] as String?,
+            contactName: contactName,
+            phoneNumber: phoneNumber,
           );
+          // If contact wasn't found in system contacts address book, fallback to UI automation to find/call them on screen or in dialer!
+          if (result.contains('Could not find contact') && contactName != null && aiService != null) {
+            onProgress?.call('Contact not in address book. Searching screen and Phone app for "$contactName"...');
+            _currentExecutor = TaskExecutor(
+              aiService: aiService,
+              screenService: _screenAutomation,
+              appLauncher: _appLauncher,
+              shizukuService: _shizuku,
+              onProgress: onProgress,
+            );
+            result = await _currentExecutor!.executeTask(
+              'Call "$contactName". Check the screen, dialer, recent calls, or missed call banner for "$contactName" or "Call back" and tap to call.',
+            );
+            _currentExecutor = null;
+          }
           break;
 
         case 'send_sms':
+          final smsContact = action.params['contact_name'] as String?;
+          final smsNumber = action.params['phone_number'] as String?;
+          final message = action.params['message'] as String? ?? '';
           result = await _communication.sendSms(
-            contactName: action.params['contact_name'] as String?,
-            phoneNumber: action.params['phone_number'] as String?,
-            message: action.params['message'] as String? ?? '',
+            contactName: smsContact,
+            phoneNumber: smsNumber,
+            message: message,
           );
+          if (result.contains('Could not find contact') && smsContact != null && aiService != null) {
+            onProgress?.call('Searching screen for "$smsContact" to send SMS...');
+            _currentExecutor = TaskExecutor(
+              aiService: aiService,
+              screenService: _screenAutomation,
+              appLauncher: _appLauncher,
+              shizukuService: _shizuku,
+              onProgress: onProgress,
+            );
+            result = await _currentExecutor!.executeTask(
+              'Find "$smsContact" and send message: "$message"',
+            );
+            _currentExecutor = null;
+          }
           break;
 
         case 'search_contact':
