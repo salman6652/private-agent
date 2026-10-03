@@ -232,10 +232,13 @@ class AgentAccessibilityService : AccessibilityService() {
         val text = node.text?.toString() ?: ""
         val desc = node.contentDescription?.toString() ?: ""
 
+        val cleanTarget = targetText.removeSuffix("...").removeSuffix("…").trim()
         val exactMatch = text.equals(targetText, ignoreCase = true)
             || desc.equals(targetText, ignoreCase = true)
+            || (cleanTarget.isNotEmpty() && (text.equals(cleanTarget, ignoreCase = true) || desc.equals(cleanTarget, ignoreCase = true)))
         val containsMatch = text.contains(targetText, ignoreCase = true)
             || desc.contains(targetText, ignoreCase = true)
+            || (cleanTarget.isNotEmpty() && (text.contains(cleanTarget, ignoreCase = true) || desc.contains(cleanTarget, ignoreCase = true)))
         val matches = if (exactOnly) exactMatch else containsMatch
 
         if (matches && (!skipEditable || !node.isEditable) && clickNodeOrParent(node)) {
@@ -254,6 +257,27 @@ class AgentAccessibilityService : AccessibilityService() {
     }
 
     private fun clickNodeOrParent(node: AccessibilityNodeInfo): Boolean {
+        val rect = Rect()
+        node.getBoundsInScreen(rect)
+
+        val pkg = node.packageName?.toString()?.lowercase() ?: ""
+        val className = node.className?.toString() ?: ""
+        val isWebOrBrowser = pkg.contains("chrome") ||
+            pkg.contains("browser") ||
+            pkg.contains("firefox") ||
+            pkg.contains("opera") ||
+            pkg.contains("webview") ||
+            className.contains("WebView", ignoreCase = true)
+
+        // Web browsers and video platforms require physical touch gestures (user activation)
+        // for video playback and web links to activate properly.
+        if (isWebOrBrowser && !rect.isEmpty && rect.width() > 0 && rect.height() > 0) {
+            return clickAtCoordinates(
+                rect.centerX().toFloat(),
+                rect.centerY().toFloat()
+            )
+        }
+
         var clickTarget: AccessibilityNodeInfo? = node
         while (clickTarget != null && !clickTarget.isClickable) {
             clickTarget = clickTarget.parent
@@ -262,8 +286,6 @@ class AgentAccessibilityService : AccessibilityService() {
             return true
         }
 
-        val rect = Rect()
-        node.getBoundsInScreen(rect)
         return !rect.isEmpty && clickAtCoordinates(
             rect.centerX().toFloat(),
             rect.centerY().toFloat()

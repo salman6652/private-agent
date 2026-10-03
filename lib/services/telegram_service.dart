@@ -97,12 +97,36 @@ class TelegramService {
   }
 
   Future<void> _handleIncomingMessage(String chatId, String text) async {
+    final trimmedText = text.trim();
+    final lower = trimmedText.toLowerCase();
+
+    // 1. Intercept stop / cancel commands immediately
+    if (lower == '/stop' ||
+        lower == '/cancel' ||
+        lower == 'stop' ||
+        lower == 'cancel') {
+      _actionHandler.cancelTask();
+      await _sendMessage(chatId, '🛑 Task has been cancelled.');
+      return;
+    }
+
+    // 2. Help / start command
+    if (lower == '/start' || lower == '/help') {
+      await _sendMessage(
+        chatId,
+        '🤖 *PrivateAgent Bot Active*\n\n'
+        '• Send any task command to automate your phone.\n'
+        '• Send `/stop` or `/cancel` to stop an ongoing task midway.',
+      );
+      return;
+    }
+
     // Acknowledge receipt
-    await _sendMessage(chatId, '🤖 Received: "$text". Working on it...');
+    await _sendMessage(chatId, '🤖 Received: "$trimmedText". Working on it...');
 
     try {
       // 1. Send text to AI
-      final aiResponse = await _aiService.sendMessage(text);
+      final aiResponse = await _aiService.sendMessage(trimmedText);
       
       // 2. Parse the action
       final action = _aiService.parseAction(aiResponse);

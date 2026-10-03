@@ -185,8 +185,8 @@ class ScreenAutomationService {
       }
 
       // Truncate very long text to save tokens
-      if (displayText.length > 50) {
-        displayText = '${displayText.substring(0, 50)}...';
+      if (displayText.length > 100) {
+        displayText = '${displayText.substring(0, 100)}...';
       }
 
       final tags = <String>[];

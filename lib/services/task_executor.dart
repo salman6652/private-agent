@@ -79,6 +79,10 @@ Rules:
 - You will receive a TEXT DUMP of the accessibility tree containing exact text strings and center coordinates.
 - ALWAYS use the text dump to decide your next action.
 - If you need to click something, prefer using `click_text`. If the element does not have text, use `click_at` with the coordinates provided in the text dump.
+- In web browsers or video platforms (like YouTube):
+  - To open or play a video from search results, click the video title or click the thumbnail coordinates using `click_at` or `click_text`.
+  - If clicking by text does not start the video, switch immediately to `click_at` using the center coordinates of the video thumbnail or title.
+  - Once the video player opens and playback begins, mark the task as complete (set is_complete=true).
 - When typing in a search box, you MUST click it first, wait a step, and THEN type.
 - After typing a search query, use `press_enter` once. If the screen does not change, click the exact visible suggestion text. Do not repeat the same submit action more than twice.
 - Never scroll or swipe more than three times in a row. After three scrolls, choose the best visible result or take a different action instead of continuing to browse indefinitely.
@@ -165,6 +169,7 @@ Rules:
     // Smart pre-launch shortcuts: execute common sequences without LLM
     final shortcut = _getNavigationShortcut(userGoal);
     String lastAction = '';
+    String lastParamsStr = '';
     int sameActionCount = 0;
     int consecutiveFailures = 0;
     String lastFailedAction = '';
@@ -433,13 +438,22 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
 
       _report('Step ${step + 1}: $reasoning');
 
-      sameActionCount = action == lastAction ? sameActionCount + 1 : 1;
+      final currentParamsStr = jsonEncode(params);
+      if (action == lastAction && currentParamsStr == lastParamsStr) {
+        sameActionCount++;
+      } else {
+        sameActionCount = 1;
+      }
+      lastParamsStr = currentParamsStr;
+
       final repeatLimit = action == 'press_enter'
           ? 2
-          : (action == 'scroll' || action == 'swipe' ? 3 : 1000);
+          : ((action == 'click_text' || action == 'click_at')
+              ? 2
+              : (action == 'scroll' || action == 'swipe' ? 3 : 1000));
       if (sameActionCount > repeatLimit) {
         final blockedResult =
-            'Blocked repeated $action action. Use a different action on the visible screen.';
+            'Blocked repeated $action action with identical parameters. Use a different action on the visible screen.';
         results.add(blockedResult);
         _report(blockedResult);
         consecutiveFailures = 3;
